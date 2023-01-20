@@ -10,13 +10,6 @@ const cloudinary = require("cloudinary").v2;
 
 const Offer = require("../models/Offer");
 
-// Données à remplacer avec les vôtres :
-cloudinary.config({
-  cloud_name: "dsoydeobc",
-  api_key: "336911827334496",
-  api_secret: "P6Ra-NnE7h8o4xZXhPozcqQjY2I",
-});
-
 const convertToBase64 = (file) => {
   return `data:${file.mimetype};base64,${file.data.toString("base64")}`;
 };

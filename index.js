@@ -11,6 +11,15 @@ app.use(express.json());
 mongoose.set("strictQuery", false);
 mongoose.connect("mongodb://localhost:27017/andromeda-vinted");
 
+// Données à remplacer avec les vôtres :
+cloudinary.config({
+  cloud_name: "dsoydeobc",
+  api_key: "336911827334496",
+  api_secret: "P6Ra-NnE7h8o4xZXhPozcqQjY2I",
+  secure: true,
+});
+//
+
 const userRoutes = require("./routes/user");
 const offerRoutes = require("./routes/offer");
 
