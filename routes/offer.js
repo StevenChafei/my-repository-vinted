@@ -1,72 +1,75 @@
 const express = require("express");
-
+const fileUpload = require("express-fileupload");
+const cloudinary = require("cloudinary").v2;
 const router = express.Router();
 
-const fileUpload = require("express-fileupload");
 const isAuthenticated = require("../middlewares/isAuthenticated");
-const { find } = require("../models/Offer");
-
-const cloudinary = require("cloudinary").v2;
+const convertToBase64 = require("../utils/convertToBase64");
 
 const Offer = require("../models/Offer");
 
-const convertToBase64 = (file) => {
-  return `data:${file.mimetype};base64,${file.data.toString("base64")}`;
-};
-
-// convertToBase64(req.files.pictures[0]);
-
 router.post(
   "/offer/publish",
-  fileUpload(),
   isAuthenticated,
+  fileUpload(),
   async (req, res) => {
     try {
+      // console.log("Je rentre dans ma route");
+      console.log(req.user);
+      //   console.log(req.body);
+      //   console.log(req.files);
       const { title, description, price, condition, city, brand, size, color } =
         req.body;
 
-      const pictureToUpload = req.files.picture;
-
-      const result = await cloudinary.uploader.upload(
-        convertToBase64(pictureToUpload),
-        {
-          folder: "/Vinted",
-        }
-      );
+      //   console.log(result);
       const newOffer = new Offer({
         product_name: title,
         product_description: description,
         product_price: price,
         product_details: [
-          { ETAT: condition },
-          { EMPLACEMENT: city },
-          { MARQUE: brand },
-          { TAILLE: size },
-          { COULEUR: color },
+          {
+            MARQUE: brand,
+          },
+          {
+            TAILLE: size,
+          },
+          {
+            ÉTAT: condition,
+          },
+          {
+            COULEUR: color,
+          },
+          {
+            EMPLACEMENT: city,
+          },
         ],
-        product_image: result,
+        // product_image: result,
         owner: req.user,
       });
-
+      //   const picture = req.files.picture;
+      //   const result = await cloudinary.uploader.upload(convertToBase64(picture));
+      //   newOffer.product_image = result;
       await newOffer.save();
-
-      const newOfferToShow = await Offer.findOne({ owner: req.user }).populate(
-        "owner"
-      );
-      res.json(newOfferToShow);
-      // res.status(200).json({
-      // //   message: `Offer successfully created !`,
-      // //   newOffer,
-      // // });
+      //   const response = await Offer.findById(newOffer._id).populate(
+      //     "owner",
+      //     "account"
+      //   );
+      //   console.log(newOffer);
+      //   res.json(response);
+      res.json(newOffer);
     } catch (error) {
-      res.status(400).json({ error: error.message });
+      res.status(400).json({ message: error.message });
     }
   }
 );
 
 router.get("/offers", async (req, res) => {
   try {
-    const { title, priceMin, priceMax } = req.query;
+    // title=pantalon&priceMax=200&priceMin=20&sort=price-asc&page=3
+
+    const { title, priceMin, priceMax, sort, page } = req.query;
+    // const title = req.query.title;
+    // console.log(title);
 
     const filters = {};
     if (title) {
@@ -77,7 +80,7 @@ router.get("/offers", async (req, res) => {
       filters.product_price = { $gte: Number(priceMin) };
     }
 
-    console.log(filters);
+    // console.log(filters);
 
     if (priceMax) {
       if (filters.product_price) {
@@ -86,74 +89,116 @@ router.get("/offers", async (req, res) => {
         filters.product_price = { $lte: Number(priceMax) };
       }
     }
-    console.log(filters);
+
+    // console.log(filters);
 
     const sortFilter = {};
 
+    if (sort === "price-asc") {
+      sortFilter.product_price = "asc"; // ou 1 ou "ascending"
+    } else if (sort === "price-desc") {
+      sortFilter.product_price = "desc"; // ou -1 ou "descending"
+    }
+
+    // On peut aussi faire ça :
+
+    // if (sort) {
+    //   sortFilter.product_price = sort.replace("price-", "");
+    // }
+
+    const limit = 5;
+
+    let pageRequired = 1;
+    if (page) pageRequired = Number(page);
+
+    //                        0*5   =0  1*5   =5  2*5   =10  3*5   =15
+    // 5 résultats par page : 1 skip=0, 2 skip=5, 3 skip=10, 4 skip=15
+    // 3 résultats par page : 1 skip=0, 2 skip=3, 3 skip=6, 4 skip=9
+
+    const skip = (pageRequired - 1) * limit;
+
     const offers = await Offer.find(filters)
       .sort(sortFilter)
-      .select("product_price product_name");
-    res.json(offers);
+      .skip(skip)
+      .limit(limit)
+      .populate("owner", "account");
+    // .select("product_price product_name");
 
-    // const offers = await Offer.find().select("product_name product_price -_id");
-    // res.json(offers);
-    // const regExp = /nike/i;
+    const count = await Offer.countDocuments(filters);
 
-    // const regExp = new RegExp("blanc");
-    // const results = await Offer.find({ product_description: regExp }).select(
-    //   "product_name product_description product_price -_id"
-    // );
+    const response = {
+      count: count,
+      offers: offers,
+    };
 
-    // const results = await Offer.find({ product_price: { $gt: 4 } })
-    //   .select("product_name product_price -_id")
-    //   .sort({ product_price: "desc" });
+    res.json(response);
+
+    // const results = await Offer.find({
+    //   product_name: /vert/i,
+    //   product_price: { $gte: 20, $lte: 200 },
+    // })
+    //   .sort({ product_price: -1 || 1 })
+    //   .select("product_name product_price");
   } catch (error) {
-    res.status(400).json({ error: error.message });
+    res.status(400).json({ message: error.message });
   }
 });
 
-module.exports = router;
+router.get("/offer/:id", async (req, res) => {
+  try {
+    console.log(req.params);
+    const offer = await Offer.findById(req.params.id).populate(
+      "owner",
+      "account"
+    );
+    res.json(offer);
+  } catch (error) {
+    res.status(400).json({ message: error.message });
+  }
+});
 
 // router.get("/offers", async (req, res) => {
-// FIND
-//   const regExp = /chaussettes/i;
-//   const regExp = new RegExp("e", "i");
-//   const results = await Offer.find({ product_name: regExp }).select(
-//     "product_name product_price"
-//   );
+//   // FIND
+//   //   const regExp = /chaussettes/i;
+//   //   const regExp = new RegExp("e", "i");
+//   //   const results = await Offer.find({ product_name: regExp }).select(
+//   //     "product_name product_price"
+//   //   );
 
-//   FIND AVEC FOURCHETTES DE PRIX
-//   $gte =  greater than or equal >=
-//   $lte = lower than or equal <=
-//   $lt = lower than <
-//   $gt = greater than >
-//   const results = await Offer.find({
-//     product_price: {
-//       $gte: 55,
-//       $lte: 200,
-//     },
-//   }).select("product_name product_price");
+//   //   FIND AVEC FOURCHETTES DE PRIX
+//   //   $gte =  greater than or equal >=
+//   //   $lte = lower than or equal <=
+//   //   $lt = lower than <
+//   //   $gt = greater than >
+//   //   const results = await Offer.find({
+//   //     product_price: {
+//   //       $gte: 55,
+//   //       $lte: 200,
+//   //     },
+//   //   }).select("product_name product_price");
 
-//   SORT
-//   "asc" === "ascending" === 1
-//   "desc" === "descending" === -1
-//   const results = await Offer.find()
-//     .sort({ product_price: -1 })
-//     .select("product_name product_price");
+//   //   SORT
+//   //   "asc" === "ascending" === 1
+//   //   "desc" === "descending" === -1
+//   //   const results = await Offer.find()
+//   //     .sort({ product_price: -1 })
+//   //     .select("product_name product_price");
 
-//   ON PEUT TOUT CHAINER
-// const results = await Offer.find({
-//   product_name: /vert/i,
-//   product_price: { $gte: 20, $lte: 200 },
-// })
-//   .sort({ product_price: -1 })
-//   .select("product_name product_price");
+//   //   ON PEUT TOUT CHAINER
+//   // const results = await Offer.find({
+//   //   product_name: /vert/i,
+//   //   product_price: { $gte: 20, $lte: 200 },
+//   // })
+//   //   .sort({ product_price: -1 })
+//   //   .select("product_name product_price");
 
-//   SKIP ET LIMIT
-//   const results = await Offer.find()
-//     .skip(10)
-//     .limit(5)
-//     .select("product_name product_price");
+//   //   SKIP ET LIMIT
+//   //   const results = await Offer.find()
+//   //     .skip(10)
+//   //     .limit(5)
+//   //     .select("product_name product_price");
 
-//     res.json(results);
-//   });
+//   res.json(results);
+// });
+
+module.exports = router;

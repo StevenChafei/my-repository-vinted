@@ -5,6 +5,8 @@ const fileUpload = require("express-fileupload");
 
 const isAuthenticated = require("./middlewares/isAuthenticated");
 
+const cloudinary = require("cloudinary").v2;
+
 const app = express();
 app.use(express.json());
 
