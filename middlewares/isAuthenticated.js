@@ -3,7 +3,7 @@ const User = require("../models/User");
 const isAuthenticated = async (req, res, next) => {
   try {
     const token = req.headers.authorization.replace("Bearer ", "");
-    console.log(token);
+    // console.log(token);
     // console.log(token);
     const user = await User.findOne({ token: token });
 
